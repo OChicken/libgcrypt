@@ -28,7 +28,6 @@
 #include "g10lib.h"
 #include "cipher.h"
 #include "sntrup761.h"
-#include "mceliece6688128f.h"
 #include "kyber.h"
 #include "kem-ecc.h"
 
@@ -95,10 +94,6 @@ _gcry_kem_keypair (int algo,
       sntrup761_keypair (pubkey, seckey, NULL, sntrup761_random);
       return 0;
 
-    case GCRY_KEM_CM6688128F:
-      mceliece6688128f_keypair (pubkey, seckey);
-      return 0;
-
     case GCRY_KEM_MLKEM512:
       if (seckey_len != GCRY_KEM_MLKEM512_SECKEY_LEN
           || pubkey_len != GCRY_KEM_MLKEM512_PUBKEY_LEN)
@@ -154,12 +149,6 @@ _gcry_kem_encap (int algo,
           || shared_len != GCRY_KEM_SNTRUP761_SHARED_LEN)
         return GPG_ERR_INV_VALUE;
       sntrup761_enc (ciphertext, shared, pubkey, NULL, sntrup761_random);
-      return 0;
-
-    case GCRY_KEM_CM6688128F:
-      if (optional != NULL)
-	return GPG_ERR_INV_VALUE;
-      mceliece6688128f_enc (ciphertext, shared, pubkey);
       return 0;
 
     case GCRY_KEM_MLKEM512:
@@ -219,12 +208,6 @@ _gcry_kem_decap (int algo,
           || shared_len != GCRY_KEM_SNTRUP761_SHARED_LEN)
         return GPG_ERR_INV_VALUE;
       sntrup761_dec (shared, ciphertext, seckey);
-      return 0;
-
-    case GCRY_KEM_CM6688128F:
-      if (optional != NULL)
-	return GPG_ERR_INV_VALUE;
-      mceliece6688128f_dec (shared, ciphertext, seckey);
       return 0;
 
     case GCRY_KEM_MLKEM512:
