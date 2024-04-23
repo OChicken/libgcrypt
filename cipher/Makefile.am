@@ -95,6 +95,7 @@ EXTRA_libcipher_la_SOURCES = \
 	des.c des-amd64.S \
 	dsa.c \
 	elgamal.c \
+	ecelg.c \
 	ecc.c ecc-curves.c ecc-misc.c ecc-common.h \
 	ecc-ecdh.c ecc-ecdsa.c ecc-eddsa.c ecc-gost.c ecc-sm2.c \
 	idea.c \

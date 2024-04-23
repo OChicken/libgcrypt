@@ -217,7 +217,7 @@ available_ciphers="$available_ciphers sm4 aria"
 enabled_ciphers=""
 
 # Definitions for public-key ciphers.
-available_pubkey_ciphers="dsa elgamal rsa ecc"
+available_pubkey_ciphers="dsa elgamal ecelg rsa ecc"
 enabled_pubkey_ciphers=""
 
 # Definitions for message digests.
@@ -3345,6 +3345,13 @@ AM_CONDITIONAL(USE_ELGAMAL, [test "$found" = "1"])
 if test "$found" = "1" ; then
    GCRYPT_PUBKEY_CIPHERS="$GCRYPT_PUBKEY_CIPHERS elgamal.lo"
    AC_DEFINE(USE_ELGAMAL, 1, [Defined if this module should be included])
+fi
+
+LIST_MEMBER(ecelg, $enabled_pubkey_ciphers)
+AM_CONDITIONAL(USE_ECELG, [test "$found" = "1"])
+if test "$found" = "1" ; then
+   GCRYPT_PUBKEY_CIPHERS="$GCRYPT_PUBKEY_CIPHERS ecelg.lo"
+   AC_DEFINE(USE_ECELG, 1, [Defined if this module should be included])
 fi
 
 LIST_MEMBER(ecc, $enabled_pubkey_ciphers)
