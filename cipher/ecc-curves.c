@@ -117,6 +117,8 @@ static const struct
 
     { "sm2p256v1", "1.2.156.10197.1.301" },
 
+    { "elgamal", "nistp256" },
+
     { NULL, NULL}
   };
 
@@ -540,6 +542,19 @@ static const ecc_domain_parms_t domain_parms[] =
       "0xfffffffeffffffffffffffffffffffff7203df6b21c6052b53bbf40939d54123",
       "0x32c4ae2c1f1981195f9904466a39c9948fe30bbff2660be1715a4589334c74c7",
       "0xbc3736a2f4f6779c59bdcee36b692153d0a9877cc62a474002df32e52139f0a0",
+      1
+    },
+
+    {
+      "elgamal", 256, 1, /* same as NIST P-256 */
+      MPI_EC_WEIERSTRASS, ECC_DIALECT_STANDARD,
+      "0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff",
+      "0xffffffff00000001000000000000000000000000fffffffffffffffffffffffc",
+      "0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b",
+      "0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551",
+
+      "0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296",
+      "0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5",
       1
     },
 

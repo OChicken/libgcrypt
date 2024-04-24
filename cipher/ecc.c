@@ -70,6 +70,7 @@ static const char *ecc_names[] =
     "eddsa",
     "gost",
     "sm2",
+    "elgamal",
     NULL,
   };
 
@@ -1238,6 +1239,13 @@ ecc_encrypt_raw (gcry_sexp_t *r_ciph, gcry_sexp_t s_data, gcry_sexp_t keyparms)
       goto leave;
     }
 
+  if ((ctx.flags & PUBKEY_FLAG_ELGAMAL))
+    {
+      /* All encryption will be done, return it.  */
+      rc = _gcry_ecc_elgamal_encrypt (r_ciph, data, ec);
+      goto leave;
+    }
+
   /* The following is false: assert( mpi_cmp_ui( R.x, 1 )==0 );, so */
   {
     mpi_point_struct R;  /* Result that we return.  */
@@ -1384,6 +1392,12 @@ ecc_decrypt_raw (gcry_sexp_t *r_plain, gcry_sexp_t s_data, gcry_sexp_t keyparms)
     {
       /* All decryption will be done, return it.  */
       rc = _gcry_ecc_sm2_decrypt (r_plain, l1, ec);
+      goto leave;
+    }
+  else if ((ctx.flags & PUBKEY_FLAG_ELGAMAL))
+    {
+      /* All decryption will be done, return it. */
+      rc = _gcry_ecc_elgamal_decrypt(r_plain, l1, ec);
       goto leave;
     }
   else

@@ -140,4 +140,11 @@ gpg_err_code_t _gcry_ecc_sm2_verify (gcry_mpi_t input, mpi_ec_t ec,
                                      gcry_mpi_t r, gcry_mpi_t s);
 
 
+/*-- ecc-elgamal.c --*/
+gpg_err_code_t _gcry_ecc_elgamal_encrypt (gcry_sexp_t *r_ciph,
+                                          gcry_mpi_t input, mpi_ec_t ec);
+gpg_err_code_t _gcry_ecc_elgamal_decrypt (gcry_sexp_t *r_plain,
+                                          gcry_sexp_t data_list, mpi_ec_t ec);
+
+
 #endif /*GCRY_ECC_COMMON_H*/

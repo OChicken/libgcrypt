@@ -140,6 +140,11 @@ _gcry_pk_util_parse_flaglist (gcry_sexp_t list,
             ; /* Ignore - it is the default.  */
           else if (!memcmp (s, "prehash", 7))
             flags |= PUBKEY_FLAG_PREHASH;
+          else if (!memcmp (s, "elgamal", 7))
+            {
+                encoding = PUBKEY_ENC_RAW;
+                flags |= PUBKEY_FLAG_ELGAMAL | PUBKEY_FLAG_RAW_FLAG;
+            }
           else if (!igninvflag)
             rc = GPG_ERR_INV_FLAG;
           break;
@@ -443,6 +448,8 @@ _gcry_pk_util_preparse_sigval (gcry_sexp_t s_sig, const char **algo_names,
         *r_eccflags = PUBKEY_FLAG_GOST;
       if (!strcmp (name, "sm2"))
         *r_eccflags = PUBKEY_FLAG_SM2;
+      if (!strcmp (name, "elgamal"))
+        *r_eccflags = PUBKEY_FLAG_ELGAMAL;
     }
 
   *r_parms = l2;
