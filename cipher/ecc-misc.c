@@ -171,6 +171,42 @@ _gcry_mpi_ec_ec2os (gcry_mpi_point_t point, mpi_ec_t ec)
   return result;
 }
 
+static unsigned char *
+_gcry_ecc_ec_patch_x_buf (gcry_mpi_t x, gcry_mpi_t p,
+                     unsigned int *r_length)
+{
+  gpg_err_code_t rc;
+  int pbytes = (mpi_get_nbits (p)+7)/8;
+  size_t n;
+  unsigned char *buf, *ptr;
+
+  buf = xmalloc ( 1 + pbytes );
+  *buf = 03;
+  ptr = buf+1;
+  rc = _gcry_mpi_print (GCRYMPI_FMT_USG, ptr, pbytes, &n, x);
+  if (rc)
+    log_fatal ("mpi_print failed: %s\n", gpg_strerror (rc));
+  if (n < pbytes)
+    {
+      memmove (ptr+(pbytes-n), ptr, n);
+      memset (ptr, 0, (pbytes-n));
+    }
+
+  *r_length = 1 + pbytes;
+  return buf;
+}
+
+
+gcry_mpi_t
+_gcry_ecc_ec_patch_x (gcry_mpi_t x, gcry_mpi_t p)
+{
+  unsigned char *buf;
+  unsigned int buflen;
+
+  buf = _gcry_ecc_ec_patch_x_buf (x, p, &buflen);
+  return mpi_set_opaque (NULL, buf, 8*buflen);
+}
+
 
 /* Decode octet string in VALUE into RESULT, in the format defined by SEC 1.
    RESULT must have been initialized and is set on success to the

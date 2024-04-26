@@ -76,6 +76,7 @@ const char *_gcry_ecc_dialect2str (enum ecc_dialects dialect);
 unsigned char *_gcry_ecc_ec2os_buf (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t p,
                                     unsigned int *r_length);
 gcry_mpi_t   _gcry_ecc_ec2os (gcry_mpi_t x, gcry_mpi_t y, gcry_mpi_t p);
+gcry_mpi_t   _gcry_ecc_ec_patch_x (gcry_mpi_t x, gcry_mpi_t p);
 
 mpi_point_t  _gcry_ecc_compute_public (mpi_point_t Q, mpi_ec_t ec);
 gpg_err_code_t _gcry_ecc_mont_encodepoint (gcry_mpi_t x, unsigned int nbits,
