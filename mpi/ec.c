@@ -1711,12 +1711,12 @@ sub_points_weierstrass (mpi_point_t result,
                         mpi_point_t p1, mpi_point_t p2,
                         mpi_ec_t ctx)
 {
-  (void)result;
-  (void)p1;
-  (void)p2;
-  (void)ctx;
-  log_fatal ("%s: %s not yet supported\n",
-             "_gcry_mpi_ec_sub_points", "Weierstrass");
+  mpi_point_t p2i = _gcry_mpi_point_new(0);
+  point_set (p2i, p2);
+  ctx->subm (p2i->y, ctx->p, p2i->y, ctx);
+  _gcry_mpi_point_set(p2, p2i->x, p2i->y, p2i->z);
+  add_points_weierstrass(result, p1, p2, ctx);
+  _gcry_mpi_point_release(p2i);
 }
 
 

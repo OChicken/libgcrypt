@@ -35,54 +35,6 @@
 #define MPI_NBYTES(m)   ((mpi_get_nbits(m) + 7) / 8)
 
 
-/* Key derivation function from X9.63/SECG */
-static gpg_err_code_t
-kdf_x9_63 (int algo, const void *in, size_t inlen, void *out, size_t outlen)
-{
-  gpg_err_code_t rc;
-  gcry_md_hd_t hd;
-  int mdlen;
-  u32 counter = 1;
-  u32 counter_be;
-  unsigned char *dgst;
-  unsigned char *pout = out;
-  size_t rlen = outlen;
-  size_t len;
-
-  rc = _gcry_md_open (&hd, algo, 0);
-  if (rc)
-    return rc;
-
-  mdlen = _gcry_md_get_algo_dlen (algo);
-
-  while (rlen > 0)
-    {
-      counter_be = be_bswap32 (counter);   /* cpu_to_be32 */
-      counter++;
-
-      _gcry_md_write (hd, in, inlen);
-      _gcry_md_write (hd, &counter_be, sizeof(counter_be));
-
-      dgst = _gcry_md_read (hd, algo);
-      if (dgst == NULL)
-        {
-          rc = GPG_ERR_DIGEST_ALGO;
-          break;
-        }
-
-      len = mdlen < rlen ? mdlen : rlen;  /* min(mdlen, rlen) */
-      memcpy (pout, dgst, len);
-      rlen -= len;
-      pout += len;
-
-      _gcry_md_reset (hd);
-    }
-
-  _gcry_md_close (hd);
-  return rc;
-}
-
-
 /* _gcry_ecc_elgamal_encrypt description:
  *   input:
  *     data[0] : octet string
@@ -98,133 +50,69 @@ gpg_err_code_t
 _gcry_ecc_elgamal_encrypt (gcry_sexp_t *r_ciph, gcry_mpi_t input, mpi_ec_t ec)
 {
   gpg_err_code_t rc;
-  const int algo = GCRY_MD_SM3;
-  gcry_md_hd_t md = NULL;
   int mdlen;
   unsigned char *dgst;
   gcry_mpi_t k = NULL;
-  mpi_point_struct kG, kP;
-  gcry_mpi_t x1, y1;
-  gcry_mpi_t x2, y2;
-  gcry_mpi_t x2y2 = NULL;
-  unsigned char *in = NULL;
-  unsigned int inlen;
-  unsigned char *raw;
-  unsigned int rawlen;
-  unsigned char *cipher = NULL;
-  int i;
+  mpi_point_struct M, kG, kQ;
+  gcry_mpi_t x, y;
+  gcry_mpi_t c1, c2;
 
+  point_init (&M);
   point_init (&kG);
-  point_init (&kP);
-  x1 = mpi_new (0);
-  y1 = mpi_new (0);
-  x2 = mpi_new (0);
-  y2 = mpi_new (0);
+  point_init (&kQ);
+  y  = mpi_new (0);
 
-  in = _gcry_mpi_get_buffer (input, 0, &inlen, NULL);
-  if (!in)
+  x = _gcry_ecc_ec_patch_x (input, ec->p);
+  rc = _gcry_ecc_sec_decodepoint (x, ec, &M);
+  log_debug("on curve? %d\n", _gcry_mpi_ec_curve_point(&M, ec));
+  if (_gcry_mpi_ec_get_affine (x, y, &M, ec))
     {
-      rc = gpg_err_code_from_syserror ();
-      if (DBG_CIPHER)
-        log_debug ("ecc_encrypt    => %s\n", gpg_strerror (rc));
+      rc = GPG_ERR_INV_DATA;
       goto leave;
     }
-
-  cipher = xtrymalloc (inlen);
-  if (!cipher)
-    {
-      rc = gpg_err_code_from_syserror ();
-      goto leave;
-    }
+  log_debug("on curve? %d\n", _gcry_mpi_ec_curve_point(&M, ec));
+  log_printpnt ("ecc_encrypt    M", &M, NULL);
 
   /* rand k in [1, n-1] */
   k = _gcry_dsa_gen_k (ec->n, GCRY_VERY_STRONG_RANDOM);
+  log_printmpi ("k = ", k);
 
-  /* [k]G = (x1, y1) */
+  /* kG <- [k]G */
   _gcry_mpi_ec_mul_point (&kG, k, ec->G, ec);
-  if (_gcry_mpi_ec_get_affine (x1, y1, &kG, ec))
+  if (_gcry_mpi_ec_get_affine (x, y, &kG, ec))
     {
       if (DBG_CIPHER)
         log_debug ("Bad check: kG can not be a Point at Infinity!\n");
       rc = GPG_ERR_INV_DATA;
       goto leave;
     }
+  if (!rc)
+    c1 = _gcry_ecc_ec2os (x, y, ec->p);
 
-  /* [k]P = (x2, y2) */
-  _gcry_mpi_ec_mul_point (&kP, k, ec->Q, ec);
-  if (_gcry_mpi_ec_get_affine (x2, y2, &kP, ec))
+  /* kQ <- M+[k]Q */
+  _gcry_mpi_ec_mul_point (&kQ, k, ec->Q, ec);
+  _gcry_mpi_ec_add_points (&kQ, &M, &kQ, ec);
+  if (_gcry_mpi_ec_get_affine (x, y, &kQ, ec))
     {
       rc = GPG_ERR_INV_DATA;
       goto leave;
     }
-
-  /* t = KDF(x2 || y2, klen) */
-  x2y2 = _gcry_mpi_ec_ec2os (&kP, ec);
-  raw = mpi_get_opaque (x2y2, &rawlen);
-  rawlen = (rawlen + 7) / 8;
-
-  /* skip the prefix '0x04' */
-  raw += 1;
-  rawlen -= 1;
-  rc = kdf_x9_63 (algo, raw, rawlen, cipher, inlen);
-  if (rc)
-    goto leave;
-
-  /* cipher = t xor in */
-  for (i = 0; i < inlen; i++)
-    cipher[i] ^= in[i];
-
-  /* hash(x2 || IN || y2) */
-  mdlen = _gcry_md_get_algo_dlen (algo);
-  rc = _gcry_md_open (&md, algo, 0);
-  if (rc)
-    goto leave;
-  _gcry_md_write (md, raw, MPI_NBYTES(x2));
-  _gcry_md_write (md, in, inlen);
-  _gcry_md_write (md, raw + MPI_NBYTES(x2), MPI_NBYTES(y2));
-  dgst = _gcry_md_read (md, algo);
-  if (dgst == NULL)
-    {
-      rc = GPG_ERR_DIGEST_ALGO;
-      goto leave;
-    }
+  if (!rc)
+    c2 = _gcry_ecc_ec2os (x, y, ec->p);
 
   if (!rc)
-    {
-      gcry_mpi_t c1;
-      gcry_mpi_t c3;
-      gcry_mpi_t c2;
-
-      c3 = mpi_new (0);
-      c2 = mpi_new (0);
-
-      c1 = _gcry_ecc_ec2os (x1, y1, ec->p);
-      _gcry_mpi_set_opaque_copy (c3, dgst, mdlen * 8);
-      _gcry_mpi_set_opaque_copy (c2, cipher, inlen * 8);
-
-      rc = sexp_build (r_ciph, NULL,
-                       "(enc-val(flags elgamal)(elgamal(a%M)(b%M)(c%M)))",
-                       c1, c3, c2);
-
-      mpi_free (c1);
-      mpi_free (c3);
-      mpi_free (c2);
-    }
+    rc = sexp_build (r_ciph, NULL,
+                     "(enc-val(flags elgamal)(elgamal(a%m)(b%m)))", c1, c2);
 
 leave:
-  _gcry_md_close (md);
-  mpi_free (x2y2);
-  mpi_free (k);
-
+  point_free (&M);
   point_free (&kG);
-  point_free (&kP);
-  mpi_free (x1);
-  mpi_free (y1);
-  mpi_free (x2);
-  mpi_free (y2);
-
-  xfree (cipher);
-  xfree (in);
+  point_free (&kQ);
+  mpi_free (k);
+  mpi_free (x);
+  mpi_free (y);
+  mpi_free (c1);
+  mpi_free (c2);
 
   return rc;
 }
@@ -235,138 +123,82 @@ _gcry_ecc_elgamal_decrypt (gcry_sexp_t *r_plain, gcry_sexp_t data_list, mpi_ec_t
 {
   gpg_err_code_t rc;
   gcry_mpi_t data_c1 = NULL;
-  gcry_mpi_t data_c3 = NULL;
   gcry_mpi_t data_c2 = NULL;
 
   /*
    * Extract the data.
    */
-  rc = sexp_extract_param (data_list, NULL, "/a/b/c",
-                           &data_c1, &data_c3, &data_c2, NULL);
+  rc = sexp_extract_param (data_list, NULL, "ab", &data_c1, &data_c2, NULL);
   if (rc)
     goto leave;
   if (DBG_CIPHER)
     {
       log_printmpi ("ecc_decrypt  d_c1", data_c1);
-      log_printmpi ("ecc_decrypt  d_c3", data_c3);
       log_printmpi ("ecc_decrypt  d_c2", data_c2);
     }
 
   {
-    const int algo = GCRY_MD_SM3;
-    gcry_md_hd_t md = NULL;
-    int mdlen;
-    unsigned char *dgst;
     mpi_point_struct c1;
-    mpi_point_struct kP;
-    gcry_mpi_t x2, y2;
-    gcry_mpi_t x2y2 = NULL;
-    unsigned char *in = NULL;
-    unsigned int inlen;
-    unsigned char *plain = NULL;
-    unsigned char *raw;
-    unsigned int rawlen;
-    unsigned char *c3 = NULL;
-    unsigned int c3_len;
-    int i;
+    mpi_point_struct c2;
+    mpi_point_struct M;
+    gcry_mpi_t x, y;
 
     point_init (&c1);
-    point_init (&kP);
-    x2 = mpi_new (0);
-    y2 = mpi_new (0);
+    point_init (&c2);
+    point_init (&M);
+    x = mpi_new (0);
+    y = mpi_new (0);
 
-    in = mpi_get_opaque (data_c2, &inlen);
-    inlen = (inlen + 7) / 8;
-    plain = xtrymalloc (inlen);
-    if (!plain)
-      {
-        rc = gpg_err_code_from_syserror ();
-        goto leave_main;
-      }
-
+    /* get and check c1 */
     rc = _gcry_ecc_sec_decodepoint (data_c1, ec, &c1);
     if (rc)
       goto leave_main;
-
     if (!_gcry_mpi_ec_curve_point (&c1, ec))
       {
         rc = GPG_ERR_INV_DATA;
         goto leave_main;
       }
 
-    /* [d]C1 = (x2, y2), C1 = [k]G */
-    _gcry_mpi_ec_mul_point (&kP, ec->d, &c1, ec);
-    if (_gcry_mpi_ec_get_affine (x2, y2, &kP, ec))
+    /* get and check c2 */
+    rc = _gcry_ecc_sec_decodepoint(data_c2, ec, &c2);
+    if (rc)
+      goto leave_main;
+    if (!_gcry_mpi_ec_curve_point(&c2, ec))
+      {
+	rc = GPG_ERR_INV_DATA;
+	goto leave_main;
+      }
+
+    /* c1 <- [d]c1, where c1 = [k]G */
+    _gcry_mpi_ec_mul_point (&c1, ec->d, &c1, ec);
+    if (_gcry_mpi_ec_get_affine (x, y, &c1, ec))
       {
         rc = GPG_ERR_INV_DATA;
         goto leave_main;
       }
 
-    /* t = KDF(x2 || y2, inlen) */
-    x2y2 = _gcry_mpi_ec_ec2os (&kP, ec);
-    raw = mpi_get_opaque (x2y2, &rawlen);
-    rawlen = (rawlen + 7) / 8;
-    /* skip the prefix '0x04' */
-    raw += 1;
-    rawlen -= 1;
-    rc = kdf_x9_63 (algo, raw, rawlen, plain, inlen);
-    if (rc)
-      goto leave_main;
-
-    /* plain = C2 xor t */
-    for (i = 0; i < inlen; i++)
-      plain[i] ^= in[i];
-
-    /* Hash(x2 || IN || y2) == C3 */
-    mdlen = _gcry_md_get_algo_dlen (algo);
-    rc = _gcry_md_open (&md, algo, 0);
-    if (rc)
-      goto leave_main;
-    _gcry_md_write (md, raw, MPI_NBYTES(x2));
-    _gcry_md_write (md, plain, inlen);
-    _gcry_md_write (md, raw + MPI_NBYTES(x2), MPI_NBYTES(y2));
-    dgst = _gcry_md_read (md, algo);
-    if (dgst == NULL)
+    /* M = c2 - d*c1 */
+    _gcry_mpi_ec_sub_points (&M, &c2, &c1, ec);
+    if (_gcry_mpi_ec_get_affine (x, NULL, &M, ec))
       {
-        memset (plain, 0, inlen);
-        rc = GPG_ERR_DIGEST_ALGO;
-        goto leave_main;
-      }
-    c3 = mpi_get_opaque (data_c3, &c3_len);
-    c3_len = (c3_len + 7) / 8;
-    if (c3_len != mdlen || memcmp (dgst, c3, c3_len) != 0)
-      {
-        memset (plain, 0, inlen);
         rc = GPG_ERR_INV_DATA;
         goto leave_main;
       }
-
     if (!rc)
       {
-        gcry_mpi_t r;
-
-        r = mpi_new (inlen * 8);
-        _gcry_mpi_set_buffer (r, plain, inlen, 0);
-
-        rc = sexp_build (r_plain, NULL, "(value %m)", r);
-
-        mpi_free (r);
+        rc = sexp_build (r_plain, NULL, "(value %m)", x);
       }
 
   leave_main:
-    _gcry_md_close (md);
-    mpi_free (x2y2);
-    xfree (plain);
-
+    point_free (&M);
     point_free (&c1);
-    point_free (&kP);
-    mpi_free (x2);
-    mpi_free (y2);
+    point_free (&c2);
+    mpi_free (x);
+    mpi_free (y);
   }
 
  leave:
   _gcry_mpi_release (data_c1);
-  _gcry_mpi_release (data_c3);
   _gcry_mpi_release (data_c2);
 
   return rc;
