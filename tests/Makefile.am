@@ -36,7 +36,7 @@ tests_bin += fips186-dsa dsa-rfc6979 t-dsa
 endif
 
 if USE_ECC
-tests_bin += curves t-ecdsa t-ed25519 t-cv25519 t-x448 t-ed448
+tests_bin += curves t-ecdsa t-ed25519 t-cv25519 t-x448 t-ed448 t-ecelg
 endif
 
 

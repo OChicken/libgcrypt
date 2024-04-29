@@ -50,8 +50,6 @@ gpg_err_code_t
 _gcry_ecc_elgamal_encrypt (gcry_sexp_t *r_ciph, gcry_mpi_t input, mpi_ec_t ec)
 {
   gpg_err_code_t rc;
-  int mdlen;
-  unsigned char *dgst;
   gcry_mpi_t k = NULL;
   mpi_point_struct M, kG, kQ;
   gcry_mpi_t x, y;
