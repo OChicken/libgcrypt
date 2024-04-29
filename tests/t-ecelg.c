@@ -117,7 +117,8 @@ check(gcry_mpi_t m)
 
   /* write decrypted msg to buf */
   gcry_mpi_print(GCRYMPI_FMT_STD, buf, SYMBYTES, NULL, m);
-  show_note("decrypted msg: %s", buf);
+  if (debug)
+    show_note("decrypted msg: %s", buf);
 
   /* read answer from file */
   fd = open("nistp256.txt", O_RDONLY, 0644);
@@ -129,7 +130,8 @@ check(gcry_mpi_t m)
   if (err)
     fail("fail in dec when comparing with the original msg\n");
   else
-    show_note("Decrypted msg is consistent with the original msg.\n");
+    if (debug)
+      show_note("Decrypted msg is consistent with the original msg.\n");
 
   return err;
 }
@@ -149,19 +151,24 @@ gcry_ecelg_check_encodable(gcry_mpi_t x, gcry_ctx_t ctx)
   tmp = gcry_mpi_new(0);
 
   /* rhs = x^3+ax+b */
-  show_note("Calculate rhs = x^3+ax+b, where x is the msg.\n");
+  if (debug)
+    show_note("Calculate rhs = x^3+ax+b, where x is the msg.\n");
   gcry_mpi_powm(rhs, x, GCRYMPI_CONST_THREE, p);  /* x^3      */
   gcry_mpi_mulm(tmp, a, x, p);                    /* ax       */
   gcry_mpi_addm(rhs, rhs, tmp, p);                /* x^3+ax   */
   gcry_mpi_addm(rhs, rhs, b, p);                  /* x^3+ax+b */
 
   /* Legendre symbol */
-  show_note("Calculate Legendre symbol Jp(rhs) = rhs^((p-1)/2) mod p\n");
+  if (debug)
+    show_note("Calculate Legendre symbol Jp(rhs) = rhs^((p-1)/2) mod p\n");
   gcry_mpi_sub_ui(tmp, p, 1);
   gcry_mpi_div(tmp, NULL, tmp, GCRYMPI_CONST_TWO, 0);  /* (p-1)/2 */
   gcry_mpi_powm(tmp, rhs, tmp, p);
   if (!gcry_mpi_cmp_ui(tmp, 1))
-    show_note("Jp(x^3+ax+b) = 1 ⇒ msg can be encoded to the curve.\n");
+    {
+      if (debug)
+        show_note("Jp(x^3+ax+b) = 1 ⇒ msg can be encoded to the curve.\n");
+    }
   else
     {
       err = 1;
@@ -195,14 +202,16 @@ gcry_mpi_ec_get_y(gcry_mpi_t *y, gcry_mpi_t x, gcry_ctx_t ctx)
   tmp = gcry_mpi_new(0);
 
   /* rhs = x^3+ax+b */
-  /* show_note("Calculate rhs = x^3+ax+b, where x is the msg.\n"); */
+  if (debug)
+    show_note("Calculate rhs = x^3+ax+b, where x is the msg.\n");
   gcry_mpi_powm(rhs, x, GCRYMPI_CONST_THREE, p);  /* x^3      */
   gcry_mpi_mulm(tmp, a, x, p);                    /* ax       */
   gcry_mpi_addm(rhs, rhs, tmp, p);                /* x^3+ax   */
   gcry_mpi_addm(rhs, rhs, b, p);                  /* x^3+ax+b */
 
   /* calc y coordinate */
-  show_note("Calculate y = sqrt(rhs) mod p = rhs^((p+1)/4) mod p\n");
+  if (debug)
+    show_note("Calculate y = sqrt(rhs) mod p = rhs^((p+1)/4) mod p\n");
   gcry_mpi_add_ui(tmp, p, 1);
   gcry_mpi_div(tmp, NULL, tmp, GCRYMPI_CONST_FOUR, 0);  /* (p+1)/4 */
   gcry_mpi_powm(*y, rhs, tmp, p);
@@ -385,9 +394,11 @@ ecelg_enc(gcry_sexp_t *ct, gcry_sexp_t pt, gcry_sexp_t pk)
   /* encode message to point m */
   m = gcry_mpi_point_new(0);
   my = gcry_mpi_new(0);
-  show_sexp("pt", pt);
+  if (debug)
+    show_sexp("pt", pt);
   err = gcry_sexp_extract_param(pt, "data", "'value'", &mx, NULL);
-  show_mpi("mx", mx);
+  if (debug)
+    show_mpi("mx", mx);
   gcry_mpi_ec_get_y(&my, mx, ctx);
   gcry_mpi_point_set(m, mx, my, GCRYMPI_CONST_ONE);
   if (debug)
@@ -482,14 +493,16 @@ ecelg_dec(gcry_sexp_t ct, gcry_sexp_t sk)
   err = gcry_sexp_extract_param(sk, "private-key!ecc", "p d", &p, &d, NULL);
 
   /* c1 ← d*c1 */
-  show_note("c1 ← d*c1\n");
+  if (debug)
+    show_note("c1 ← d*c1\n");
   gcry_mpi_ec_mul(c1, d, c1, ctx);
   ec_cast_to_affine(&c1, ctx);
   if (debug)
     show_note("d*c1 on curve? %d\n", gcry_mpi_ec_curve_point(c1, ctx));
 
   /* m = c2 - d*c1 */
-  show_note("m = c2 - d*c1");
+  if (debug)
+    show_note("m = c2 - d*c1");
   m = gcry_mpi_point_new(0);
   gcry_mpi_ec_sub(m, c2, c1, ctx);
   ec_cast_to_affine(&m, ctx);
@@ -576,10 +589,10 @@ ecelg_set_data(gcry_sexp_t *pt, const char *curve,
     fail ("error building SEXP: %s", gpg_strerror (err));
 
   if (debug)
-  {
-    show_hex("read bell.txt", rd, buflen);
-    show_sexp("pt", *pt);
-  }
+    {
+      show_hex("read bell.txt", rd, buflen);
+      show_sexp("pt", *pt);
+    }
 
 release:
   gcry_mpi_release(mx);
@@ -612,7 +625,8 @@ user_space(const char *msg)
   if (err)
     fail("fail in decryption\n");
 
-  show_note("Result: %s\n", gpg_strerror(err));
+  if (debug)
+    show_note("Result: %s\n", gpg_strerror(err));
 
 release:
   gcry_sexp_release(sk);
@@ -632,21 +646,27 @@ rebuild_lib(const char *msg)
   gcry_mpi_t m;
 
   ecelg_set_data(&pt, "elgamal", "elgamal", msg);
-  show_sexp("pt: ", pt);
+  if (debug)
+    show_sexp("pt: ", pt);
   err = gcry_sexp_build(&keyparm, NULL, "(genkey(ecc(curve elgamal)))");
   err = gcry_pk_genkey(&keypair, keyparm);
   pk = gcry_sexp_find_token(keypair, "public-key", 0);
   sk = gcry_sexp_find_token(keypair, "private-key", 0);
-  show_sexp("pk ", pk);
-  show_sexp("sk ", sk);
+  if (debug)
+    {
+      show_sexp("pk ", pk);
+      show_sexp("sk ", sk);
+    }
 
   err = gcry_pk_encrypt (&ct, pt, pk);
-  show_sexp("ct: ", ct);
+  if (debug)
+    show_sexp("ct: ", ct);
   gcry_sexp_release (pt);
 
   /* decryption */
   err = gcry_pk_decrypt (&pt, ct, sk);
-  show_sexp("pt: ", pt);
+  if (debug)
+    show_sexp("pt: ", pt);
   gcry_sexp_release (ct);
 
   /* check */
@@ -661,8 +681,8 @@ rebuild_lib(const char *msg)
   gcry_sexp_release(keyparm);
   gcry_sexp_release(keypair);
 
-  show_note("Result: %s\n", gpg_strerror(err));
-
+  if (debug)
+    show_note("Result: %s\n", gpg_strerror(err));
 }
 
 int

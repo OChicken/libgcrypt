@@ -62,18 +62,22 @@ _gcry_ecc_elgamal_encrypt (gcry_sexp_t *r_ciph, gcry_mpi_t input, mpi_ec_t ec)
 
   x = _gcry_ecc_ec_patch_x (input, ec->p);
   rc = _gcry_ecc_sec_decodepoint (x, ec, &M);
-  log_debug("on curve? %d\n", _gcry_mpi_ec_curve_point(&M, ec));
+  if (DBG_CIPHER)
+    log_debug("M on curve? %d\n", _gcry_mpi_ec_curve_point(&M, ec));
   if (_gcry_mpi_ec_get_affine (x, y, &M, ec))
     {
       rc = GPG_ERR_INV_DATA;
       goto leave;
     }
-  log_debug("on curve? %d\n", _gcry_mpi_ec_curve_point(&M, ec));
-  log_printpnt ("ecc_encrypt    M", &M, NULL);
+  if (DBG_CIPHER)
+    log_debug("M on curve? %d\n", _gcry_mpi_ec_curve_point(&M, ec));
+  if (DBG_CIPHER)
+    log_printpnt ("ecc_encrypt    M", &M, NULL);
 
   /* rand k in [1, n-1] */
   k = _gcry_dsa_gen_k (ec->n, GCRY_VERY_STRONG_RANDOM);
-  log_printmpi ("k = ", k);
+  if (DBG_CIPHER)
+    log_printmpi ("k = ", k);
 
   /* kG <- [k]G */
   _gcry_mpi_ec_mul_point (&kG, k, ec->G, ec);
